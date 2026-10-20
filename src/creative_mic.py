@@ -98,7 +98,7 @@ class Engine:
                       'sink_properties=device.description=Creative_Mic_Internal')
             self.load('module-remap-source', 'master=' + self.sink + '.monitor',
                       'source_name=' + self.source, 'channels=1', 'channel_map=mono',
-                      'source_properties=device.description="Creative Mic"')
+                      "source_properties='device.description=\"Creative Mic\"'")
             options = ['--raw', '--format=s16le', '--rate=48000', '--channels=1', '--latency-msec=20']
             capture = self.spawn(['parec', '--device=' + selected] + options, stdout=subprocess.PIPE)
             binary = Path(__file__).resolve().parent / 'creative-mic-filter'

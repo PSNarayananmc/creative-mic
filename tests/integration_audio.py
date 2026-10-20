@@ -47,6 +47,7 @@ def main():
             engine.start('test_physical', 0, 1)
             wait_until(lambda: engine.source in cm.pactl('list','short','sources'))
             assert engine.source not in dict(cm.sources()), 'Own virtual microphone was offered as input'
+            assert 'Description: Creative Mic\n' in cm.pactl('list','sources'), 'Incorrect display name'
             with open(Path(temp)/'received.pcm','w+b') as received, open(Path(temp)/'tone.pcm','w+b') as tone:
                 samples = array.array('h', [int(10000*math.sin(i*2*math.pi*440/48000)) for i in range(48000*5)])
                 if sys.byteorder != 'little':
