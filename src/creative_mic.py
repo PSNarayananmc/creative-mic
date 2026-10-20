@@ -148,7 +148,10 @@ class Engine:
             live = {line.split('\t')[0]: line for line in pactl('list', 'short', 'modules').splitlines()}
         except (OSError, subprocess.SubprocessError):
             live = {}
-        for module in reversed(self.modules):
+        # A signal can interrupt pactl after a module loaded but before its ID
+        # reached Python. Discover all modules bearing our unique instance token.
+        owned = [module for module, line in live.items() if self.token in line]
+        for module in reversed(owned):
             if self.token in live.get(module, ''):
                 try:
                     pactl('unload-module', module)

@@ -66,7 +66,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          if git ls-remote --exit-code --tags origin refs/tags/v1.0.1; then
+          existing_tag=$(git ls-remote --tags origin refs/tags/v1.0.1)
+          if [ -n "$existing_tag" ]; then
             echo 'v1.0.1 already exists; refusing replacement'; exit 1
           fi
           python3 - <<'PY'

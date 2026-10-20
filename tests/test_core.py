@@ -162,6 +162,13 @@ Source #3
             self.assertFalse(engine.modules)
             self.assertFalse(engine.errors)
 
+    @patch.object(cm, 'pactl')
+    def test_interrupted_load_cleanup(self, pactl):
+        engine = cm.Engine()
+        pactl.side_effect = lambda *a: ('77\tmodule-remap-source\t'+engine.source if a[0]=='list' else '')
+        engine.stop()
+        pactl.assert_any_call('unload-module','77')
+
     def test_child_failure(self):
         engine = cm.Engine()
         proc = Mock()

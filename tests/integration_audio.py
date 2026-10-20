@@ -77,6 +77,19 @@ def main():
             modules = cm.pactl('list','short','modules')
             assert engine.token not in modules, 'Owned modules remained'
             assert all(any(line.startswith(m+'\t') for line in modules.splitlines()) for m in other), 'Unrelated modules removed'
+            # Exercise the actual CLI signal handlers and per-user lock cleanup.
+            baseline = cm.pactl('list','short','modules')
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                cli = subprocess.Popen([sys.executable, str(Path(cm.__file__)), '--headless',
+                                        '--source', 'test_physical'], env=cm.ENV,
+                                       stdout=log, stderr=log)
+                processes.append(cli)
+                wait_until(lambda: 'creative_mic_source_' in cm.pactl('list','short','sources'))
+                assert cli.poll() is None
+                cli.send_signal(sig)
+                assert cli.wait(timeout=10) == 0
+                assert cm.pactl('list','short','modules') == baseline, 'CLI signal cleanup left modules'
+            print('PASS: CLI SIGINT and SIGTERM cleanup')
             # Native process failure is detected and cleanup still succeeds.
             engine.start('test_physical', 1, 1)
             engine.children[1].kill()
