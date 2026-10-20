@@ -4,6 +4,7 @@ import argparse
 import fcntl
 import math
 import os
+import re
 from pathlib import Path
 import signal
 import subprocess
@@ -150,7 +151,17 @@ class Engine:
             live = {}
         # A signal can interrupt pactl after a module loaded but before its ID
         # reached Python. Discover all modules bearing our unique instance token.
-        owned = [module for module, line in live.items() if self.token in line]
+        def owned_line(line):
+            fields = line.split('\t')
+            if len(fields) < 3:
+                return False
+            expected = {'module-null-sink': ('sink_name', self.sink),
+                        'module-remap-source': ('source_name', self.source)}
+            if fields[1] not in expected:
+                return False
+            key, value = expected[fields[1]]
+            return re.search(r'(?:^|\s)' + key + '=' + re.escape(value) + r'(?:\s|$)', fields[2]) is not None
+        owned = [module for module, line in live.items() if owned_line(line)]
         for module in reversed(owned):
             if self.token in live.get(module, ''):
                 try:

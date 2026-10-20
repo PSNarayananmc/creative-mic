@@ -121,7 +121,7 @@ Source #3
         proc.poll.return_value = None
         engine.children = [proc]
         engine.modules = ['1','2','3']
-        pactl.side_effect = lambda *a: ('1\tmodule-null-sink\t'+engine.token+'\n2\tother\tunrelated' if a[0]=='list' else '')
+        pactl.side_effect = lambda *a: ('1\tmodule-null-sink\tsink_name='+engine.sink+'\n2\tmodule-remap-source\tmaster='+engine.sink+'.monitor source_name=unrelated' if a[0]=='list' else '')
         engine.stop()
         proc.terminate.assert_called_once()
         proc.wait.assert_called_once_with(timeout=2)
@@ -140,7 +140,7 @@ Source #3
                 if args[0] == 'load-module':
                     return str(len(engine.modules)+1)
                 if args[:3] == ('list','short','modules'):
-                    return '1\tmodule-null-sink\t'+engine.sink+'\n2\tmodule-remap-source\t'+engine.source
+                    return '1\tmodule-null-sink\tsink_name='+engine.sink+'\n2\tmodule-remap-source\tsource_name='+engine.source
                 return ''
             pactl.side_effect = call
             processes = []
@@ -165,7 +165,7 @@ Source #3
     @patch.object(cm, 'pactl')
     def test_interrupted_load_cleanup(self, pactl):
         engine = cm.Engine()
-        pactl.side_effect = lambda *a: ('77\tmodule-remap-source\t'+engine.source if a[0]=='list' else '')
+        pactl.side_effect = lambda *a: ('77\tmodule-remap-source\tsource_name='+engine.source if a[0]=='list' else '')
         engine.stop()
         pactl.assert_any_call('unload-module','77')
 
