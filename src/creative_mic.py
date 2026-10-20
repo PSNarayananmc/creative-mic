@@ -70,6 +70,7 @@ class Engine:
         self.errors = []
         self.active = False
         self.last_probe = 0
+        self.warning = ""
         self.token = uuid.uuid4().hex
         self.sink = 'creative_mic_sink_' + self.token
         self.source = 'creative_mic_source_' + self.token
@@ -88,7 +89,7 @@ class Engine:
         self.children.append(proc)
         return proc
 
-    def start(self, selected, mix, gain):
+    def start(self, selected, mix, gain, profile="podcast"):
         if self.active or self.children or self.modules:
             raise RuntimeError('Engine already started')
         try:
@@ -106,7 +107,7 @@ class Engine:
             if not binary.exists():
                 binary = Path(__file__).resolve().parents[1] / 'build/creative-mic-filter'
             try:
-                filtered = self.spawn([str(binary), '--mix', str(mix), '--gain', str(gain)],
+                filtered = self.spawn([str(binary), '--mix', str(mix), '--gain', str(gain), '--profile', profile],
                                       stdin=capture.stdout, stdout=subprocess.PIPE)
             finally:
                 capture.stdout.close()
@@ -115,6 +116,7 @@ class Engine:
                            stdin=filtered.stdout, stdout=subprocess.DEVNULL)
             finally:
                 filtered.stdout.close()
+            self.warning = ""
             self.active = True
             self.last_probe = 0
         except BaseException:
@@ -122,6 +124,10 @@ class Engine:
             raise
 
     def check(self):
+        if len(self.errors) >= 2:
+            diagnostic = os.pread(self.errors[1].fileno(), 4096, 0)
+            if b'Input clipping detected' in diagnostic:
+                self.warning = 'Input is clipping — lower your microphone hardware gain.'
         for proc in self.children:
             if proc.poll() is not None:
                 raise RuntimeError('Audio process exited (code %s). Check microphone and audio server.' % proc.returncode)
@@ -192,7 +198,7 @@ def gui(engine, args):
     box = ttk.Frame(root, padding=20)
     box.grid()
     ttk.Label(box, text='Creative Mic', font=('Sans', 20, 'bold')).grid(sticky='w')
-    ttk.Label(box, text='Offline environmental noise suppression · RNNoise').grid(sticky='w', pady=(0, 16))
+    ttk.Label(box, text='Offline voice cleanup and level control · RNNoise').grid(sticky='w', pady=(0, 16))
     ttk.Label(box, text='Physical microphone').grid(sticky='w')
     device = ttk.Combobox(box, state='readonly', width=52)
     device.grid(sticky='ew')
@@ -211,18 +217,24 @@ def gui(engine, args):
             status.set(str(exc))
     refresh_button = ttk.Button(box, text='Refresh devices', command=refresh)
     refresh_button.grid(sticky='w', pady=8)
+    ttk.Label(box, text='Voice processing').grid(sticky='w')
+    profile = ttk.Combobox(box, state='readonly', values=['podcast', 'clean'], width=20)
+    profile.set(args.profile)
+    profile.grid(sticky='w')
+    ttk.Label(box, text='Podcast: rumble filter, gentle EQ, compressor and peak limiter.').grid(sticky='w')
     mix = tk.DoubleVar(value=args.mix)
     gain = tk.DoubleVar(value=args.gain)
     ttk.Label(box, text='Suppression mix: dry 0% — wet 100%').grid(sticky='w')
     mix_slider = ttk.Scale(box, from_=0, to=1, variable=mix)
     mix_slider.grid(sticky='ew')
     ttk.Label(box, text='Dry/wet mixing; does not change model aggressiveness.').grid(sticky='w')
-    ttk.Label(box, text='Output gain (0–4×)').grid(sticky='w', pady=(12, 0))
+    ttk.Label(box, text='Gain (start at 1×; high values can distort your microphone)').grid(sticky='w', pady=(12, 0))
     gain_control = ttk.Spinbox(box, from_=0, to=4, increment=0.1, textvariable=gain, width=8)
     gain_control.grid(sticky='w')
     def stop():
         engine.stop()
         device.config(state='readonly')
+        profile.config(state='readonly')
         refresh_button.config(state='normal')
         mix_slider.config(state='normal')
         gain_control.config(state='normal')
@@ -233,8 +245,8 @@ def gui(engine, args):
             idx = device.current()
             if idx < 0:
                 raise RuntimeError('Select a physical microphone first')
-            engine.start(choices[idx][0], bounded(1)(str(mix.get())), bounded(4)(str(gain.get())))
-            for control in (device, refresh_button, mix_slider, gain_control, start_button):
+            engine.start(choices[idx][0], bounded(1)(str(mix.get())), bounded(4)(str(gain.get())), profile.get())
+            for control in (device, profile, refresh_button, mix_slider, gain_control, start_button):
                 control.config(state='disabled')
             status.set('Running — select Creative Mic in your calling app')
         except Exception as exc:
@@ -244,13 +256,15 @@ def gui(engine, args):
     start_button.grid(sticky='w', pady=(16, 0))
     ttk.Button(box, text='Stop', command=stop).grid(sticky='e', row=start_button.grid_info()['row'])
     ttk.Label(box, textvariable=status, wraplength=460).grid(sticky='w', pady=10)
-    ttk.Label(box, text='Start Creative Mic → select it as input in Discord, Zoom, OBS\nor your browser → keep this app running.\nNo speaker isolation, echo cancellation, or dereverberation.',
+    ttk.Label(box, text='Start Creative Mic → select it as input in Discord, Zoom, OBS\nor your browser → keep this app running.\nUse headphones. Turn off mic monitoring and Discord’s mic test.\nNo speaker isolation, echo cancellation, or dereverberation.',
               wraplength=460).grid(sticky='w')
     root.protocol('WM_DELETE_WINDOW', root.destroy)
     def tick():
         if engine.active:
             try:
                 engine.check()
+                if engine.warning:
+                    status.set(engine.warning)
             except Exception as exc:
                 stop()
                 status.set(str(exc))
@@ -264,10 +278,12 @@ def gui(engine, args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', action='version', version='Creative Mic 1.0.1')
+    parser.add_argument('--version', action='version', version='Creative Mic 1.0.2')
     parser.add_argument('--list-sources', action='store_true')
     parser.add_argument('--headless', action='store_true')
     parser.add_argument('--source')
+    parser.add_argument('--profile', choices=['podcast', 'clean'], default='podcast',
+                        help='podcast adds EQ, compression and a -3 dBFS peak limiter; clean is noise suppression only')
     parser.add_argument('--mix', type=bounded(1), default=1.0)
     parser.add_argument('--gain', type=bounded(4), default=1.0)
     parser.add_argument('--gui-smoke-test', action='store_true', help=argparse.SUPPRESS)
@@ -287,10 +303,14 @@ def main(argv=None):
         if args.headless:
             if not args.source:
                 parser.error('--headless requires --source; use --list-sources')
-            engine.start(args.source, args.mix, args.gain)
+            engine.start(args.source, args.mix, args.gain, args.profile)
             print('Creative Mic running. Select it in your calling app. Ctrl+C to stop.', flush=True)
+            warned = False
             while True:
                 engine.check()
+                if engine.warning and not warned:
+                    print(engine.warning, file=sys.stderr, flush=True)
+                    warned = True
                 time.sleep(0.1)
         else:
             gui(engine, args)

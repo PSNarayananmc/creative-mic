@@ -44,7 +44,7 @@ def main():
                               'source_name=test_physical','channels=1','source_properties=device.description=Test_Microphone').strip()
             other.append(source)
             wait_until(lambda: 'test_physical' in dict(cm.sources()))
-            engine.start('test_physical', 0, 1)
+            engine.start('test_physical', 0, 1, 'podcast')
             wait_until(lambda: engine.source in cm.pactl('list','short','sources'))
             assert engine.source not in dict(cm.sources()), 'Own virtual microphone was offered as input'
             assert 'Description: Creative Mic\n' in cm.pactl('list','sources'), 'Incorrect display name'

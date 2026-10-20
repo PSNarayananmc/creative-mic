@@ -75,6 +75,51 @@ class PCMTests(unittest.TestCase):
         print('Synthetic white-noise output/input power ratio: %.6f' % ratio)
         self.assertLess(ratio, .5)
 
+class VoiceTests(unittest.TestCase):
+    def test_silence_and_profile_arguments(self):
+        self.assertEqual(run([0]*4800, '--profile','podcast'), bytes(9600))
+        self.assertEqual(subprocess.run([BIN,'--profile','unknown'], capture_output=True).returncode, 2)
+
+    def test_peak_limiter_on_sustained_and_transient_audio(self):
+        rng = random.Random(20)
+        inputs = ([32767,-32768]*4800,
+                  [0]*960+[32767]+[0]*4800,
+                  [rng.randint(-32768,32767) for _ in range(480*40)])
+        for samples in inputs:
+            samples = samples + [0]*((-len(samples))%480)
+            output = decode(run(samples, '--mix','0','--gain','4','--profile','podcast'))
+            self.assertEqual(len(output),len(samples))
+            self.assertLessEqual(max(abs(x) for x in output),23198)
+
+    def test_loud_voice_is_compressed(self):
+        def rms(amplitude):
+            samples = [int(amplitude*math.sin(i*2*math.pi*220/48000)) for i in range(48000)]
+            output = decode(run(samples,'--mix','0','--profile','podcast'))[24000:]
+            return math.sqrt(sum(x*x for x in output)/len(output))
+        quiet, loud = rms(1000), rms(16000)
+        difference = 20*math.log10(loud/quiet)
+        self.assertLess(difference,21) # Input level difference is 24.08 dB.
+        self.assertGreater(difference,5) # Preserve dynamics; do not flatten everything.
+
+    def test_rumble_is_reduced(self):
+        def power(frequency):
+            samples = [int(500*math.sin(i*2*math.pi*frequency/48000)) for i in range(48000)]
+            output = decode(run(samples,'--mix','0','--profile','podcast'))[24000:]
+            return sum(x*x for x in output)/len(output)
+        self.assertLess(power(20)/power(1000), .02)
+
+    def test_input_clip_warning(self):
+        result = subprocess.run([BIN,'--profile','podcast'],input=pcm([32767]*480),capture_output=True,check=True)
+        self.assertIn(b'Input clipping detected', result.stderr)
+        result = subprocess.run([BIN,'--profile','podcast'],input=pcm([1000]*480),capture_output=True,check=True)
+        self.assertNotIn(b'Input clipping detected', result.stderr)
+
+    def test_podcast_delay(self):
+        samples = [1000]+[0]*(480*4-1)
+        output = decode(run(samples,'--mix','0','--profile','podcast'))
+        self.assertEqual(list(output[:720]), [0]*720)
+        self.assertNotEqual(output[720],0)
+
 class RoutingTests(unittest.TestCase):
     def test_pa13_text(self):
         text = '''Source #0

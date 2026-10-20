@@ -1,4 +1,4 @@
-# Creative Mic 1.0.1
+# Creative Mic 1.0.2
 
 Offline, real-time environmental microphone noise suppression for Linux.
 Independent implementation using the bundled RNNoise v0.1 source and pretrained
@@ -10,7 +10,7 @@ claim to reproduce Agora's proprietary model or match its quality.
 Install the Ubuntu 20.04 amd64 package:
 
 ```sh
-sudo apt install ./creative-mic_1.0.1_amd64.deb
+sudo apt install ./creative-mic_1.0.2_amd64.deb
 creative-mic
 ```
 
@@ -24,11 +24,40 @@ refreshed or input permissions granted. Other sandboxed apps must be allowed to
 access the host PulseAudio server. If a call app cannot see the source, restart
 its device selection. Avoid layering multiple noise suppressors without testing.
 
-The suppression slider controls the dry/wet mix, **not model aggressiveness**.
-0% is delayed original audio; 100% is RNNoise output. Gain is a linear multiplier,
-0–4×, with saturation to signed 16-bit bounds. Settings are applied on Start;
-Stop to adjust them. Output starts with one frame of processing delay. Finite
-streams emit one output frame per input frame; the final delayed tail is omitted.
+## Voice sound and loudness
+
+**Podcast** is the default profile: an 80 Hz high-pass filter reduces rumble;
+gentle EQ cuts 250 Hz by 2 dB and boosts 3 kHz by 1.5 dB; a soft-knee 3:1
+compressor at -18 dBFS reduces loud/quiet jumps, with 2 dB fixed makeup gain;
+a 5 ms lookahead limiter bounds sample peaks to -3 dBFS. These are starting
+settings for speech, not a guarantee of studio or podcast recording quality.
+No echo or reverb effect is added. This profile does not remove room reflections.
+
+**Clean** retains the original noise-suppression-only behavior.
+
+The suppression slider controls the dry/wet **noise suppression** mix, not
+model aggressiveness. At 0%, the denoiser is bypassed with delay compensation;
+Podcast tone and dynamics processing still applies. Stop to adjust settings.
+In Podcast, gain feeds the compressor/limiter; start at 1×. Clean gain saturates
+to signed 16-bit bounds. Clipping detected at the input produces a warning in
+the GUI/CLI: lower your microphone hardware gain. Clipped microphone audio
+cannot be repaired by the output limiter, and not all analog distortion reaches
+digital full scale, so absence of a warning does not prove a clean input.
+
+Use headphones. Close Discord's mic test and disable other software monitoring
+to avoid hearing a delayed copy of your own voice. Initially turn off Discord's
+noise suppression and automatic gain control to avoid stacking processors; keep
+echo cancellation on if needed. Select Creative Mic as **input**, while output
+remains your headphones. Never feed monitoring/playback back into the microphone.
+If the mic has hardware direct monitoring, don't also monitor a delayed software
+return. Keep it roughly 10–15 cm from your mouth, slightly off-axis, with hardware
+gain low enough for loud speech to remain undistorted. Exact positioning depends
+on the microphone's pickup side and model. Soft furnishings help a roomy sound;
+a processor cannot substitute for microphone placement and room treatment.
+
+Clean's processing delay is 480 samples (10 ms); Podcast adds 240 samples (5 ms).
+Additional server and calling-app buffering adds latency. Finite streams emit
+one output frame per input frame and omit the final delayed tail.
 
 ## Scope and privacy
 
@@ -69,7 +98,7 @@ Only one routing instance per Unix user is allowed.
 
 ```sh
 creative-mic --list-sources
-creative-mic --headless --source alsa_input.YOUR_MIC --mix 1 --gain 1
+creative-mic --headless --source alsa_input.YOUR_MIC --profile podcast --mix 1 --gain 1
 ```
 
 Use an exact source name from the list. Ctrl+C stops routing and cleans up.
@@ -86,7 +115,7 @@ python3 -m unittest discover -s tests -v
 python3 tests/integration_audio.py
 xvfb-run -a python3 src/creative_mic.py --gui-smoke-test
 ./scripts/package.sh
-sudo apt install ./dist/creative-mic_1.0.1_amd64.deb
+sudo apt install ./dist/creative-mic_1.0.2_amd64.deb
 creative-mic --version
 ```
 
@@ -95,6 +124,8 @@ a newer distribution as verified 20.04 compatible. The package script uses gzip
 for both Debian archives, root ownership, and explicit permissions. Native code
 is linked against glibc/libm, with RNNoise source and model compiled in. No native
 architecture optimizations are enabled.
+
+Version 1.0.1 remains available unchanged. Version 1.0.2 adds voice processing.
 
 The GitHub Actions workflow builds and installs inside Ubuntu 20.04, runs unit,
 PulseAudio routing, and GUI smoke checks, and only then permits publishing. It

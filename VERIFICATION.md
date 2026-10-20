@@ -1,6 +1,22 @@
-# Verification — Creative Mic 1.0.1
+# Verification — Creative Mic 1.0.2
 
-## Local development checks (2026-10-20)
+## Version 1.0.2 voice-processing checks
+
+22 local tests pass. New synthetic checks cover reduced rumble, reduced level
+contrast for loud versus quiet tones, silence, exact 720-sample Podcast latency,
+invalid profile names, input clipping warnings, and a -3 dBFS sample-peak bound for sustained full-scale,
+transient, and seeded random inputs at 4× gain. These are DSP regression tests,
+not listening or speech-quality benchmarks. The default application profile is
+Podcast; the native filter defaults to Clean for explicit standalone PCM use.
+
+The v1.0.2 release workflow must repeat unit tests, real PulseAudio delivery with
+the Podcast profile, cleanup, GUI startup, package installation and executable
+startup in Ubuntu 20.04 before publishing. See the workflow linked from the
+release commit. No listening test on the user's Maono microphone has occurred.
+The reported echo has not been reproduced or diagnosed. No echo cancellation or
+dereverberation is added; input clipping warnings do not detect all distortion.
+
+## Version 1.0.1 baseline verification (2026-10-20)
 
 16 unit tests passed on the development host, with a compiled RNNoise filter:
 PCM frame counts and silence; exact 480-sample dry delay; aligned half-wet mix;

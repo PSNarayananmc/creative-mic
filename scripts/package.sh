@@ -18,7 +18,7 @@ install -m644 vendor/rnnoise/COPYING "$stage/usr/share/doc/creative-mic/RNNoise-
 install -m644 README.md VERIFICATION.md "$stage/usr/share/doc/creative-mic/"
 cat > "$stage/DEBIAN/control" <<'CONTROL'
 Package: creative-mic
-Version: 1.0.1
+Version: 1.0.2
 Section: sound
 Priority: optional
 Architecture: amd64
@@ -31,4 +31,4 @@ Description: Offline RNNoise microphone noise suppression
 CONTROL
 mkdir -p dist
 # Gzip control and data archives are supported by dpkg on Ubuntu 20.04.
-dpkg-deb --root-owner-group -Zgzip --build "$stage" dist/creative-mic_1.0.1_amd64.deb
+dpkg-deb --root-owner-group -Zgzip --build "$stage" dist/creative-mic_1.0.2_amd64.deb
