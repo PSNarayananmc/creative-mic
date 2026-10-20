@@ -45,6 +45,14 @@ class PCMTests(unittest.TestCase):
         dry = [0]*480 + samples[:-480]
         self.assertLessEqual(max(abs(m - .5*(w+d)) for m,w,d in zip(mixed,wet,dry)), 1)
 
+    def test_wet_processing_delay(self):
+        rng = random.Random(6)
+        samples = [rng.randint(-8000, 8000) for _ in range(480*100)]
+        output = decode(run(samples))
+        correlations = {lag: sum(output[i]*samples[i-lag] for i in range(480*30,len(output)))
+                        for lag in range(470,491)}
+        self.assertEqual(max(correlations, key=correlations.get), 480)
+
     def test_clipping(self):
         output = decode(run([32767, -32768]*480, '--mix', '0', '--gain', '4'))
         self.assertEqual(list(output[480:]), [32767, -32768]*240)
@@ -122,6 +130,37 @@ Source #3
         self.assertNotIn(unittest.mock.call('unload-module','3'), pactl.call_args_list)
         engine.stop()
         self.assertEqual(proc.terminate.call_count,1)
+
+    @patch.object(cm, 'pactl')
+    @patch.object(cm, 'sources', return_value=[('physical','Mic')])
+    def test_process_start_rollback(self, sources, pactl):
+        for fail_at in range(3):
+            engine = cm.Engine()
+            def call(*args):
+                if args[0] == 'load-module':
+                    return str(len(engine.modules)+1)
+                if args[:3] == ('list','short','modules'):
+                    return '1\tmodule-null-sink\t'+engine.sink+'\n2\tmodule-remap-source\t'+engine.source
+                return ''
+            pactl.side_effect = call
+            processes = []
+            def spawn(*args, **kwargs):
+                if len(processes) == fail_at:
+                    raise OSError('spawn failed')
+                proc = Mock()
+                proc.stdout = Mock()
+                proc.poll.return_value = None
+                processes.append(proc)
+                return proc
+            with patch.object(cm.subprocess, 'Popen', side_effect=spawn):
+                with self.assertRaises(OSError):
+                    engine.start('physical',1,1)
+            for proc in processes:
+                proc.terminate.assert_called_once()
+                proc.wait.assert_called_once()
+            self.assertFalse(engine.children)
+            self.assertFalse(engine.modules)
+            self.assertFalse(engine.errors)
 
     def test_child_failure(self):
         engine = cm.Engine()

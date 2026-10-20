@@ -132,7 +132,10 @@ class Engine:
         self.active = False
         for proc in self.children:
             if proc.poll() is None:
-                proc.terminate()
+                try:
+                    proc.terminate()
+                except ProcessLookupError:
+                    pass
         for proc in self.children:
             try:
                 proc.wait(timeout=2)
@@ -225,7 +228,7 @@ def gui(engine, args):
             status.set(str(exc))
     start_button = ttk.Button(box, text='Start', command=start)
     start_button.grid(sticky='w', pady=(16, 0))
-    ttk.Button(box, text='Stop', command=stop).grid(sticky='e', row=12)
+    ttk.Button(box, text='Stop', command=stop).grid(sticky='e', row=start_button.grid_info()['row'])
     ttk.Label(box, textvariable=status, wraplength=460).grid(sticky='w', pady=10)
     ttk.Label(box, text='Start Creative Mic → select it as input in Discord, Zoom, OBS\nor your browser → keep this app running.\nNo speaker isolation, echo cancellation, or dereverberation.',
               wraplength=460).grid(sticky='w')

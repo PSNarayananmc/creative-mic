@@ -21,6 +21,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y build-essential python3 python3-tk pulseaudio pulseaudio-utils xvfb xauth git ca-certificates
+          useradd --create-home --shell /bin/bash cmtest
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -31,15 +32,15 @@ jobs:
           pulseaudio --version
           ./scripts/build.sh
           python3 -m unittest discover -s tests -v
-          python3 tests/integration_audio.py
-          xvfb-run -a python3 src/creative_mic.py --gui-smoke-test
+          runuser -u cmtest -- python3 tests/integration_audio.py
+          runuser -u cmtest -- xvfb-run -a python3 src/creative_mic.py --gui-smoke-test
       - name: Package and install
         run: |
           ./scripts/package.sh
           apt-get install -y ./dist/creative-mic_1.0.1_amd64.deb
           creative-mic --version
           creative-mic --help
-          xvfb-run -a creative-mic --gui-smoke-test
+          runuser -u cmtest -- xvfb-run -a creative-mic --gui-smoke-test
           dpkg-deb --info dist/creative-mic_1.0.1_amd64.deb
           ar t dist/creative-mic_1.0.1_amd64.deb
           ldd /usr/lib/creative-mic/creative-mic-filter
@@ -50,7 +51,7 @@ jobs:
           path: dist/creative-mic_1.0.1_amd64.deb
   publish:
     needs: verify
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    if: (github.event_name == 'workflow_dispatch' && inputs.publish) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-v1.0.1]'))
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
